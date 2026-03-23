@@ -1,0 +1,15 @@
+﻿<Window x:Class="PontoDeEncontro.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Ponto de Encontro - Monitor" Height="200" Width="400"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize">
+    <Grid Margin="16">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+            <TextBlock Text="🟢 Monitorando Ponto de Encontro..." FontSize="14" FontWeight="Bold"
+                       HorizontalAlignment="Center" Margin="0,0,0,12"/>
+            <TextBlock x:Name="txtMonitorStatus" Text="Aguardando detecção..." HorizontalAlignment="Center"
+                       Margin="0,0,0,12"/>
+            <Button Content="Abrir Tela Manualmente" Width="180" Height="30" Click="BtnAbrirManual_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,12 @@
+.vs/
+bin/
+obj/
+publish/
+
+*.user
+*.suo
+*.cache
+*.pdb
+
+appsettings.user.json
+Installer/Output/
