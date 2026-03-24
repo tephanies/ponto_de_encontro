@@ -11,40 +11,107 @@ namespace PontoDeEncontro
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
-            var configurationService = new AppConfigurationService();
-            var connectionWindow = new ConnectionSettingsWindow(configurationService);
-            var dialogResult = connectionWindow.ShowDialog();
+            try
+            {
+                Run(e.Args);
+            }
+            catch (Exception ex)
+            {
+                LogService.LogError("App.OnStartup", ex);
+                MessageBox.Show(
+                    $"Erro ao iniciar o aplicativo:\n\n{ex.Message}\n\n{ex.StackTrace}",
+                    "Ponto de Encontro",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                Shutdown(1);
+            }
+        }
 
-            if (dialogResult != true || string.IsNullOrWhiteSpace(connectionWindow.ConnectionString))
+        private void Run(string[] args)
+        {
+            var configService = new AppConfigurationService();
+            var mode = DetectMode(args);
+
+            if (mode == LaunchMode.Configuracao)
+            {
+                var connectionString = ShowConnectionDialog(configService);
+                if (connectionString == null)
+                {
+                    Shutdown();
+                    return;
+                }
+                ShowMainWindow(new PontoDeEncontroWindow(new DatabaseService(connectionString)));
+                return;
+            }
+
+            // Direto ou Monitor: tenta usar conexao salva, senao pede configuracao
+            if (!TryGetConnectionString(configService, out var connStr))
             {
                 Shutdown();
                 return;
             }
 
-            var databaseService = new DatabaseService(connectionWindow.ConnectionString);
-            Window mainWindow = ShouldOpenDirectPontoEncontro(e.Args)
-                ? new PontoDeEncontroWindow(databaseService)
-                : new MainWindow(databaseService);
+            var db = new DatabaseService(connStr);
+            var window = mode == LaunchMode.Direto
+                ? (Window)new PontoDeEncontroWindow(db)
+                : new MainWindow(db);
 
-            MainWindow = mainWindow;
-            mainWindow.Show();
+            ShowMainWindow(window);
         }
 
-        private static bool ShouldOpenDirectPontoEncontro(string[] args)
+        private void ShowMainWindow(Window window)
         {
-            if (args.Any(arg => string.Equals(arg, "--ponto-encontro", StringComparison.OrdinalIgnoreCase)))
+            MainWindow = window;
+            ShutdownMode = ShutdownMode.OnMainWindowClose;
+            window.Show();
+        }
+
+        private static string? ShowConnectionDialog(AppConfigurationService configService)
+        {
+            var dialog = new ConnectionSettingsWindow(configService);
+            return dialog.ShowDialog() == true ? dialog.ConnectionString : null;
+        }
+
+        private static bool TryGetConnectionString(AppConfigurationService configService, out string connectionString)
+        {
+            if (configService.TryGetSavedConnectionString(out connectionString))
+                return true;
+
+            var result = ShowConnectionDialog(configService);
+            if (result != null)
             {
+                connectionString = result;
                 return true;
             }
 
-            var processPath = Environment.ProcessPath;
-            var executableName = processPath is null
-                ? string.Empty
-                : Path.GetFileNameWithoutExtension(processPath);
-
-            return executableName.Contains("Direto", StringComparison.OrdinalIgnoreCase)
-                || executableName.Contains("PontoEncontro", StringComparison.OrdinalIgnoreCase);
+            connectionString = string.Empty;
+            return false;
         }
+
+        private static LaunchMode DetectMode(string[] args)
+        {
+            var exeName = GetExecutableName();
+
+            if (args.Contains("--configure", StringComparer.OrdinalIgnoreCase)
+                || exeName.Contains("Config", StringComparison.OrdinalIgnoreCase)
+                || exeName.Contains("Conexao", StringComparison.OrdinalIgnoreCase))
+                return LaunchMode.Configuracao;
+
+            if (args.Contains("--ponto-encontro", StringComparer.OrdinalIgnoreCase)
+                || exeName.Contains("Direto", StringComparison.OrdinalIgnoreCase))
+                return LaunchMode.Direto;
+
+            return LaunchMode.Monitor;
+        }
+
+        private static string GetExecutableName()
+        {
+            var path = Environment.ProcessPath;
+            return path is null ? string.Empty : Path.GetFileNameWithoutExtension(path);
+        }
+
+        private enum LaunchMode { Monitor, Direto, Configuracao }
     }
 }

@@ -22,7 +22,7 @@ namespace PontoDeEncontro.Services
         public List<Ambiente> GetAmbientesPontoDeEncontro()
         {
             var lista = new List<Ambiente>();
-            const string sql = "SELECT ambNumero, ambPontoEncontro, ambExterno FROM Ambiente WHERE ambPontoEncontro = 1";
+            const string sql = "SELECT ambNumero, ISNULL(ambDescricao,''), ambPontoEncontro, ambExterno FROM Ambientes WHERE ambPontoEncontro = 1";
 
             using var conn = new SqlConnection(_connectionString);
             conn.Open();
@@ -33,9 +33,10 @@ namespace PontoDeEncontro.Services
             {
                 lista.Add(new Ambiente
                 {
-                    AmbNumero = reader.GetInt32(0),
-                    AmbPontoEncontro = reader.GetInt32(1) == 1,
-                    AmbExterno = reader.GetInt32(2) == 1
+                    AmbNumero = Convert.ToInt32(reader.GetValue(0)),
+                    AmbDescricao = reader.GetValue(1).ToString() ?? string.Empty,
+                    AmbPontoEncontro = Convert.ToInt32(reader.GetValue(2)) == 1,
+                    AmbExterno = Convert.ToInt32(reader.GetValue(3)) == 1
                 });
             }
 
@@ -48,7 +49,7 @@ namespace PontoDeEncontro.Services
         public List<int> GetAmbientesInternos()
         {
             var lista = new List<int>();
-            const string sql = "SELECT ambNumero FROM Ambiente WHERE ambExterno = 0 AND ambPontoEncontro = 0";
+            const string sql = "SELECT ambNumero FROM Ambientes WHERE ambExterno = 0 AND ambPontoEncontro = 0";
 
             using var conn = new SqlConnection(_connectionString);
             conn.Open();
@@ -56,7 +57,7 @@ namespace PontoDeEncontro.Services
             using var reader = cmd.ExecuteReader();
 
             while (reader.Read())
-                lista.Add(reader.GetInt32(0));
+                lista.Add(Convert.ToInt32(reader.GetValue(0)));
 
             return lista;
         }
@@ -69,7 +70,7 @@ namespace PontoDeEncontro.Services
             const string sql = @"
                 SELECT TOP 1 1 
                 FROM Pessoas p
-                INNER JOIN Ambiente a ON p.ambNumero = a.ambNumero
+                INNER JOIN Ambientes a ON p.ambNumero = a.ambNumero
                 WHERE a.ambPontoEncontro = 1 AND p.pesHabilitado = 1";
 
             using var conn = new SqlConnection(_connectionString);
@@ -89,7 +90,7 @@ namespace PontoDeEncontro.Services
                 SELECT DISTINCT e.empNumero, e.empDescricao
                 FROM Empresa e
                 INNER JOIN LinkEmpresaAmbientes lea ON e.empNumero = lea.empNumero
-                INNER JOIN Ambiente a ON lea.ambNumero = a.ambNumero
+                INNER JOIN Ambientes a ON lea.ambNumero = a.ambNumero
                 WHERE a.ambPontoEncontro = 1
                 ORDER BY e.empDescricao";
 
@@ -102,7 +103,7 @@ namespace PontoDeEncontro.Services
             {
                 lista.Add(new Empresa
                 {
-                    EmpNumero = reader.GetInt32(0),
+                    EmpNumero = reader.GetString(0),
                     EmpDescricao = reader.GetString(1)
                 });
             }
@@ -114,7 +115,7 @@ namespace PontoDeEncontro.Services
         /// Retorna pessoas habilitadas em ambientes vinculados à empresa selecionada,
         /// que estejam em ambientes de Ponto de Encontro.
         /// </summary>
-        public List<Pessoa> GetPessoasNoPontoDeEncontro(int empNumero, int ambPontoEncontroNumero)
+        public List<Pessoa> GetPessoasNoPontoDeEncontro(string empNumero, int ambPontoEncontroNumero)
         {
             const string sql = @"
                 SELECT p.Pin, p.pesNome, ISNULL(p.pesRamalCom,''), ISNULL(p.pesCelular,''), p.empNumero, p.ambNumero
@@ -134,13 +135,13 @@ namespace PontoDeEncontro.Services
         /// Retorna pessoas habilitadas em ambientes internos vinculados à empresa selecionada.
         /// (não externo e não ponto de encontro)
         /// </summary>
-        public List<Pessoa> GetPessoasAreaInterna(int empNumero)
+        public List<Pessoa> GetPessoasAreaInterna(string empNumero)
         {
             const string sql = @"
                 SELECT p.Pin, p.pesNome, ISNULL(p.pesRamalCom,''), ISNULL(p.pesCelular,''), p.empNumero, p.ambNumero
                 FROM Pessoas p
                 INNER JOIN LinkEmpresaAmbientes lea ON lea.empNumero = @empNumero AND lea.ambNumero = p.ambNumero
-                INNER JOIN Ambiente a ON p.ambNumero = a.ambNumero
+                INNER JOIN Ambientes a ON p.ambNumero = a.ambNumero
                 WHERE p.pesHabilitado = 1
                   AND a.ambExterno = 0
                   AND a.ambPontoEncontro = 0";
@@ -174,12 +175,12 @@ namespace PontoDeEncontro.Services
         /// <summary>
         /// Retorna os ambientes de ponto de encontro vinculados a uma empresa.
         /// </summary>
-        public List<Ambiente> GetPontosDeEncontroPorEmpresa(int empNumero)
+        public List<Ambiente> GetPontosDeEncontroPorEmpresa(string empNumero)
         {
             var lista = new List<Ambiente>();
             const string sql = @"
-                SELECT a.ambNumero, a.ambPontoEncontro, a.ambExterno
-                FROM Ambiente a
+                SELECT a.ambNumero, ISNULL(a.ambDescricao,''), a.ambPontoEncontro, a.ambExterno
+                FROM Ambientes a
                 INNER JOIN LinkEmpresaAmbientes lea ON a.ambNumero = lea.ambNumero
                 WHERE lea.empNumero = @empNumero AND a.ambPontoEncontro = 1";
 
@@ -193,9 +194,10 @@ namespace PontoDeEncontro.Services
             {
                 lista.Add(new Ambiente
                 {
-                    AmbNumero = reader.GetInt32(0),
-                    AmbPontoEncontro = reader.GetInt32(1) == 1,
-                    AmbExterno = reader.GetInt32(2) == 1
+                    AmbNumero = Convert.ToInt32(reader.GetValue(0)),
+                    AmbDescricao = reader.GetValue(1).ToString() ?? string.Empty,
+                    AmbPontoEncontro = Convert.ToInt32(reader.GetValue(2)) == 1,
+                    AmbExterno = Convert.ToInt32(reader.GetValue(3)) == 1
                 });
             }
 
@@ -220,7 +222,7 @@ namespace PontoDeEncontro.Services
                     PesNome = reader.GetValue(1).ToString() ?? string.Empty,
                     PesRamalCom = reader.GetValue(2).ToString() ?? string.Empty,
                     PesCelular = reader.GetValue(3).ToString() ?? string.Empty,
-                    EmpNumero = Convert.ToInt32(reader.GetValue(4)),
+                    EmpNumero = reader.GetValue(4).ToString() ?? string.Empty,
                     AmbNumero = Convert.ToInt32(reader.GetValue(5))
                 });
             }

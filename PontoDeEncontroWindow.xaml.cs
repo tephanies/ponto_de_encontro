@@ -53,25 +53,27 @@ namespace PontoDeEncontro
             }
             catch (Exception ex)
             {
+                LogService.LogError("CarregarEmpresas", ex);
                 txtStatus.Text = $"Erro ao carregar empresas: {ex.Message}";
             }
         }
 
-        private void CarregarPontosDeEncontro(int empNumero)
+        private void CarregarPontosDeEncontro(string empNumero)
         {
             try
             {
                 var pontos = _db.GetPontosDeEncontroPorEmpresa(empNumero);
                 cmbPontoEncontro.ItemsSource = pontos;
-                cmbPontoEncontro.DisplayMemberPath = "AmbNumero";
+                cmbPontoEncontro.DisplayMemberPath = "AmbDescricao";
 
-                lstPontosAtivos.ItemsSource = pontos.Select(p => $"Ambiente {p.AmbNumero}").ToList();
+                lstPontosAtivos.ItemsSource = pontos.Select(p => p.AmbDescricao).ToList();
 
                 if (pontos.Count > 0)
                     cmbPontoEncontro.SelectedIndex = 0;
             }
             catch (Exception ex)
             {
+                LogService.LogError("CarregarPontosDeEncontro", ex);
                 txtStatus.Text = $"Erro ao carregar pontos de encontro: {ex.Message}";
             }
         }
@@ -100,6 +102,7 @@ namespace PontoDeEncontro
             }
             catch (Exception ex)
             {
+                LogService.LogError("CarregarListas", ex);
                 txtStatus.Text = $"Erro ao carregar listas: {ex.Message}";
             }
         }
@@ -219,6 +222,8 @@ namespace PontoDeEncontro
 
         private void ChkAutoAtualizar_Changed(object sender, RoutedEventArgs e)
         {
+            if (_timer == null) return;
+
             if (chkAutoAtualizar.IsChecked == true)
                 _timer.Start();
             else

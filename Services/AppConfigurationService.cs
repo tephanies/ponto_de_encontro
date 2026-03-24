@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.IO;
 using System.Text.Json;
@@ -9,29 +10,31 @@ namespace PontoDeEncontro.Services
 {
     public class AppConfigurationService
     {
-        private const string UserSettingsFileName = "appsettings.user.json";
         private readonly string _basePath;
+        private string AppSettingsPath => Path.Combine(_basePath, "appsettings.json");
 
         public AppConfigurationService(string? basePath = null)
         {
             _basePath = basePath ?? AppDomain.CurrentDomain.BaseDirectory;
         }
 
-        public string UserSettingsDirectory => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "PontoDeEncontro");
-
-        public string UserSettingsPath => Path.Combine(UserSettingsDirectory, UserSettingsFileName);
-
         public DatabaseSettings LoadSettings()
         {
-            var configuration = new ConfigurationBuilder()
+            var config = new ConfigurationBuilder()
                 .SetBasePath(_basePath)
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
-                .AddJsonFile(UserSettingsPath, optional: true, reloadOnChange: false)
                 .Build();
 
-            return configuration.GetSection("DatabaseSettings").Get<DatabaseSettings>() ?? new DatabaseSettings();
+            return config.GetSection("DatabaseSettings").Get<DatabaseSettings>() ?? new DatabaseSettings();
+        }
+
+        public void SaveSettings(DatabaseSettings settings)
+        {
+            var json = JsonSerializer.Serialize(
+                new { DatabaseSettings = settings },
+                new JsonSerializerOptions { WriteIndented = true });
+
+            File.WriteAllText(AppSettingsPath, json);
         }
 
         public string BuildConnectionString(DatabaseSettings settings)
@@ -54,38 +57,79 @@ namespace PontoDeEncontro.Services
             return builder.ConnectionString;
         }
 
-        public void SaveSettings(DatabaseSettings settings)
+        public List<string> GetAvailableDatabases(DatabaseSettings serverSettings)
         {
-            Directory.CreateDirectory(UserSettingsDirectory);
-
-            var payload = new
+            var builder = new SqlConnectionStringBuilder
             {
-                DatabaseSettings = settings
+                DataSource = serverSettings.Server,
+                InitialCatalog = "master",
+                IntegratedSecurity = serverSettings.UseIntegratedSecurity,
+                TrustServerCertificate = true,
+                ConnectTimeout = 5
             };
 
-            var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions
+            if (!serverSettings.UseIntegratedSecurity)
             {
-                WriteIndented = true
-            });
+                builder.UserID = serverSettings.UserId;
+                builder.Password = serverSettings.Password;
+            }
 
-            File.WriteAllText(UserSettingsPath, json);
+            var databases = new List<string>();
+            const string sql = @"
+                SELECT name FROM sys.databases
+                WHERE name NOT IN ('master','tempdb','model','msdb')
+                ORDER BY name";
+
+            using var conn = new SqlConnection(builder.ConnectionString);
+            conn.Open();
+            using var cmd = new SqlCommand(sql, conn);
+            using var reader = cmd.ExecuteReader();
+
+            while (reader.Read())
+                databases.Add(reader.GetString(0));
+
+            return databases;
         }
 
         public void ValidateSettings(DatabaseSettings settings)
         {
             if (string.IsNullOrWhiteSpace(settings.Server))
-            {
                 throw new InvalidOperationException("Informe o servidor SQL.");
-            }
-
-            if (string.IsNullOrWhiteSpace(settings.Database))
-            {
-                throw new InvalidOperationException("Informe o nome do banco de dados.");
-            }
 
             if (!settings.UseIntegratedSecurity && string.IsNullOrWhiteSpace(settings.UserId))
+                throw new InvalidOperationException("Informe o usuario do banco de dados.");
+
+            if (string.IsNullOrWhiteSpace(settings.Database))
+                throw new InvalidOperationException("Informe o nome do banco de dados.");
+        }
+
+        public void ValidateServerSettings(DatabaseSettings settings)
+        {
+            if (string.IsNullOrWhiteSpace(settings.Server))
+                throw new InvalidOperationException("Informe o servidor SQL.");
+
+            if (!settings.UseIntegratedSecurity && string.IsNullOrWhiteSpace(settings.UserId))
+                throw new InvalidOperationException("Informe o usuario do banco de dados.");
+        }
+
+        public bool TryGetSavedConnectionString(out string connectionString)
+        {
+            connectionString = string.Empty;
+
+            try
             {
-                throw new InvalidOperationException("Informe o usuário do banco de dados.");
+                var settings = LoadSettings();
+                ValidateSettings(settings);
+                connectionString = BuildConnectionString(settings);
+
+                using var conn = new SqlConnection(connectionString);
+                conn.Open();
+                return true;
+            }
+            catch
+            {
+                connectionString = string.Empty;
+                return false;
             }
         }
     }
