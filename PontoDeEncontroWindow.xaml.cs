@@ -58,11 +58,11 @@ namespace PontoDeEncontro
             }
         }
 
-        private void CarregarPontosDeEncontro(string empNumero)
+        private void CarregarPontosDeEncontro(int empNumero)
         {
             try
             {
-                var pontos = _db.GetPontosDeEncontroPorEmpresa(empNumero);
+            var pontos = _db.GetPontosDeEncontroPorEmpresa(empNumero);
                 cmbPontoEncontro.ItemsSource = pontos;
                 cmbPontoEncontro.DisplayMemberPath = "AmbDescricao";
 

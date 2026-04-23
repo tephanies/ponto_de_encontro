@@ -1,8 +1,14 @@
 ﻿using System;
-using System.Windows;
+using System.Diagnostics;
+using System.IO;
+using System.Threading;
+using System
+    .Windows;
 using System.Windows.Threading;
 using PontoDeEncontro.Services;
             
+
+
 namespace PontoDeEncontro
 {
     /// <summary>
@@ -10,18 +16,24 @@ namespace PontoDeEncontro
     /// </summary>
     public partial class MainWindow : Window
     {
+        private const string ConnectionString = "Server=LACERDA;Database=WSP1;User Id=sa;Password=sa123";
         private readonly DatabaseService _db;
         private readonly DispatcherTimer _timerPolling;
         private PontoDeEncontroWindow? _pontoWindow;
 
-        public MainWindow(DatabaseService databaseService)
+        public MainWindow() : this(new DatabaseService(ConnectionString))
+        {
+        }
+
+        public MainWindow(DatabaseService db)
         {
             InitializeComponent();
-            _db = databaseService;
+
+            _db = db;
 
             _timerPolling = new DispatcherTimer
             {
-                Interval = TimeSpan.FromSeconds(8)
+                Interval = TimeSpan.FromSeconds(3)
             };
             _timerPolling.Tick += TimerPolling_Tick;
             _timerPolling.Start();
@@ -31,16 +43,20 @@ namespace PontoDeEncontro
         {
             try
             {
-                bool existe = _db.ExistePessoaNoPontoDeEncontro();
+                if (_pontoWindow != null && _pontoWindow.IsLoaded) return;
 
-                if (existe)
+                var events = _db.GetPendingPontoEvents();
+                if (events.Count > 0)
                 {
-                    txtMonitorStatus.Text = $"Pessoa detectada! ({DateTime.Now:HH:mm:ss})";
-                    AbrirTelaPontoDeEncontro();
+                    var ids = events.Select(ev => ev.Id).ToArray();
+                    _db.MarkEventsProcessed(ids);
+
+                    OpenPontoWindow();
+                    txtMonitorStatus.Text = $"Evento detectado ({events.Count}) - janela aberta.";
                 }
                 else
                 {
-                    txtMonitorStatus.Text = $"Nenhuma pessoa no ponto de encontro. ({DateTime.Now:HH:mm:ss})";
+                    txtMonitorStatus.Text = $"Aguardando... ({DateTime.Now:HH:mm:ss})";
                 }
             }
             catch (Exception ex)
@@ -49,9 +65,8 @@ namespace PontoDeEncontro
             }
         }
 
-        private void AbrirTelaPontoDeEncontro()
+        private void OpenPontoWindow()
         {
-            // Se a janela já estiver aberta, apenas traz para frente
             if (_pontoWindow != null && _pontoWindow.IsLoaded)
             {
                 _pontoWindow.Activate();
@@ -59,14 +74,11 @@ namespace PontoDeEncontro
             }
 
             _pontoWindow = new PontoDeEncontroWindow(_db);
-            _pontoWindow.Closed += (s, args) => _pontoWindow = null;
+            _pontoWindow.Closed += (_, _) => _pontoWindow = null;
             _pontoWindow.Show();
         }
 
-        private void BtnAbrirManual_Click(object sender, RoutedEventArgs e)
-        {
-            AbrirTelaPontoDeEncontro();
-        }
+        private void BtnAbrirManual_Click(object sender, RoutedEventArgs e) => OpenPontoWindow();
 
         protected override void OnClosed(EventArgs e)
         {

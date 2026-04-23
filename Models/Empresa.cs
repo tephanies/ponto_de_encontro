@@ -2,7 +2,7 @@
 {
     public class Empresa
     {
-        public string EmpNumero { get; set; } = string.Empty;
+        public int EmpNumero { get; set; }
         public string EmpDescricao { get; set; } = string.Empty;
     }
 }

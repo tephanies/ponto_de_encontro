@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Windows;
 using PontoDeEncontro.Services;
 
@@ -8,9 +9,24 @@ namespace PontoDeEncontro
 {
     public partial class App : Application
     {
+        private Mutex? _mutex;
+
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+
+            if (IsDiretoMode(e.Args))
+            {
+                _mutex = new Mutex(true, "PontoDeEncontroDiretoMutex", out bool created);
+                if (!created)
+                {
+                    _mutex.Dispose();
+                    _mutex = null;
+                    Shutdown();
+                    return; 
+                }
+            }
+
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
             try
@@ -104,6 +120,13 @@ namespace PontoDeEncontro
                 return LaunchMode.Direto;
 
             return LaunchMode.Monitor;
+        }
+
+        private static bool IsDiretoMode(string[] args)
+        {
+            var exeName = GetExecutableName();
+            return args.Contains("--ponto-encontro", StringComparer.OrdinalIgnoreCase)
+                || exeName.Contains("Direto", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string GetExecutableName()
