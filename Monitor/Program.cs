@@ -1,103 +1,28 @@
 using System;
-using System.Collections.Generic;
-using System.Data.SqlClient;
-using System.Diagnostics;
-using System.IO;
-using System.Threading;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
-class Program
-{
-    static string? ConnectionString;
-    static string? ExePath;
-    static int PollSeconds = 3;
-    static int BatchSize = 50;
-
-    static void Main(string[] args)
+var builder = Host.CreateDefaultBuilder(args)
+    .UseWindowsService()
+    .ConfigureLogging(logging =>
     {
-        if (args.Length >= 2)
-        {
-            ConnectionString = args[0];
-            ExePath = args[1];
-        }
-        else
-        {
-            Console.WriteLine("Usage: Monitor <connectionString> <path-to-exe> [pollSeconds] [batchSize]");
-            return;
-        }
-
-        if (args.Length >= 3 && int.TryParse(args[2], out var p)) PollSeconds = p;
-        if (args.Length >= 4 && int.TryParse(args[3], out var b)) BatchSize = b;
-
-        Console.WriteLine($"Monitor started. Polling every {PollSeconds}s. Exe: {ExePath}");
-
-        var cancel = false;
-        Console.CancelKeyPress += (s, e) => { e.Cancel = true; cancel = true; };
-
-        while (!cancel)
-        {
-            try
-            {
-                var ids = ClaimPendingEvents();
-                if (ids.Count > 0)
-                {
-                    Console.WriteLine($"Claimed {ids.Count} events.");
-                    TryLaunchOnce(ExePath!);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine(ex.ToString());
-            }
-
-            for (int i = 0; i < PollSeconds && !cancel; i++) Thread.Sleep(1000);
-        }
-
-        Console.WriteLine("Monitor stopping.");
-    }
-
-    static List<int> ClaimPendingEvents()
+        logging.ClearProviders();
+        logging.AddConsole();
+    })
+    .ConfigureServices((hostContext, services) =>
     {
-        var ids = new List<int>();
-        using var conn = new SqlConnection(ConnectionString);
-        conn.Open();
+        // Expecting args: <connectionString> <path-to-exe> [pollSeconds] [batchSize]
+        string connectionString = args.Length >= 1 ? args[0] : string.Empty;
+        string exePath = args.Length >= 2 ? args[1] : string.Empty;
+        int pollSeconds = args.Length >= 3 && int.TryParse(args[2], out var p) ? p : 3;
+        int batchSize = args.Length >= 4 && int.TryParse(args[3], out var b) ? b : 50;
 
-        var sql = $@"
-WITH cte AS (
-    SELECT TOP ({BatchSize}) Id FROM dbo.PontoEncontroEvents WHERE Processed = 0 ORDER BY CreatedAt
-)
-UPDATE dbo.PontoEncontroEvents
-SET Processed = 1, ProcessedAt = SYSUTCDATETIME()
-OUTPUT inserted.Id
-WHERE Id IN (SELECT Id FROM cte);";
+        services.AddSingleton(new WorkerServiceOptions(connectionString, exePath, pollSeconds, batchSize));
+        services.AddHostedService(sp => new WorkerService(sp.GetRequiredService<ILogger<WorkerService>>(), connectionString, exePath, pollSeconds, batchSize));
+    });
 
-        using var cmd = new SqlCommand(sql, conn);
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read()) ids.Add(reader.GetInt32(0));
-        return ids;
-    }
+var host = builder.Build();
+await host.RunAsync();
 
-    static void TryLaunchOnce(string exePath)
-    {
-        try
-        {
-            var name = Path.GetFileNameWithoutExtension(exePath);
-            var running = Process.GetProcessesByName(name);
-            if (running.Length > 0)
-            {
-                Console.WriteLine($"Process {name} already running (instances={running.Length}). Skipping launch.");
-                return;
-            }
-
-            var psi = new ProcessStartInfo(exePath)
-            {
-                UseShellExecute = true
-            };
-            Process.Start(psi);
-            Console.WriteLine($"Started {exePath}.");
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Failed to start {exePath}: {ex.Message}");
-        }
-    }
-}
+public record WorkerServiceOptions(string ConnectionString, string ExePath, int PollSeconds, int BatchSize);
