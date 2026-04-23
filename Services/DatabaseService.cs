@@ -52,7 +52,7 @@ namespace PontoDeEncontro.Services
             {
                 lista.Add(new Empresa
                 {
-                    EmpNumero = reader.GetInt32(0),
+                    EmpNumero = Convert.ToInt32(reader.GetValue(0)),
                     EmpDescricao = reader.IsDBNull(1) ? string.Empty : reader.GetString(1)
                 });
             }
@@ -64,10 +64,13 @@ namespace PontoDeEncontro.Services
         {
             var lista = new List<Ambiente>();
             const string sql = @"
-                    SELECT a.ambNumero, a.ambPontoEncontro, a.ambExterno, ISNULL(a.ambDescricao,'') 
+                    SELECT a.ambNumero, a.ambPontoEncontro, a.ambExterno, 
+                    ISNULL(a.ambDescricao,'') 
                     FROM Ambientes a
-                    INNER JOIN LinkEmpresaAmbientes lea ON a.ambNumero = lea.ambNumero
-                    WHERE lea.empNumero = @empNumero AND ISNULL(a.ambPontoEncontro,0) = 1
+                    INNER JOIN LinkEmpresaAmbientes lea ON 
+                    a.ambNumero = lea.ambNumero
+                    WHERE lea.empNumero = @empNumero 
+                    AND ISNULL(a.ambPontoEncontro,0) = 1
                     ORDER BY a.ambNumero";
 
             using var conn = new SqlConnection(_connectionString);
@@ -79,9 +82,9 @@ namespace PontoDeEncontro.Services
             {
                 lista.Add(new Ambiente
                 {
-                    AmbNumero = reader.GetInt32(0),
-                    AmbPontoEncontro = reader.GetInt32(1) == 1,
-                    AmbExterno = reader.GetInt32(2) == 1,
+                    AmbNumero = Convert.ToInt32(reader.GetValue(0)),
+                    AmbPontoEncontro = Convert.ToInt32(reader.GetValue(1)) == 1,
+                    AmbExterno = Convert.ToInt32(reader.GetValue(2)) == 1,
                     AmbDescricao = reader.IsDBNull(3) ? string.Empty : reader.GetString(3)
                 });
             }
@@ -157,7 +160,7 @@ namespace PontoDeEncontro.Services
                 {
                     Id = reader.GetInt32(0),
                     Pin = reader.IsDBNull(1) ? null : reader.GetString(1),
-                    AmbNumero = reader.GetInt32(2),
+                    AmbNumero = Convert.ToInt32(reader.GetValue(2)),
                     CreatedAt = reader.GetDateTime(3),
                     Processed = reader.GetBoolean(4),
                     ProcessedAt = reader.IsDBNull(5) ? null : reader.GetDateTime(5)
